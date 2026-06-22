@@ -813,11 +813,9 @@ async function enviar() {
     showSuccess(); return;
   }
   try {
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: new URLSearchParams({ data: JSON.stringify(data) })
-    });
+    const url = new URL(SCRIPT_URL);
+    url.searchParams.set('data', JSON.stringify(data));
+    await fetch(url.toString(), { mode: 'no-cors' });
     showSuccess();
   } catch {
     btn.textContent = 'Tentar novamente'; btn.disabled = false;
