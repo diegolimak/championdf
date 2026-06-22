@@ -279,6 +279,27 @@ table.copat td.val{font-family:'Nunito',sans-serif;font-weight:700;text-align:ri
 /* ─────────────────────────────────────────────
    GOOGLE APPS SCRIPT — cole em Extensões > Apps Script
    ─────────────────────────────────────────────
+
+   // Rode setupPlanilha() UMA VEZ para criar o cabeçalho na aba Respostas
+   function setupPlanilha() {
+     const ss = SpreadsheetApp.getActiveSpreadsheet();
+     let sheet = ss.getSheetByName("Respostas");
+     if (!sheet) sheet = ss.insertSheet("Respostas");
+     const cabecalho = [
+       "Data/Hora","Nome","Data Nasc.","Idade","Faixa Etária",
+       "Plano","Modalidade","Acomodação","Coparticipação",
+       "Valor Titular","Total Mensal","Qtd. Dependentes",
+       "Dep 1 - Nome","Dep 1 - Parentesco","Dep 1 - Nasc.","Dep 1 - Idade","Dep 1 - Faixa","Dep 1 - Valor",
+       "Dep 2 - Nome","Dep 2 - Parentesco","Dep 2 - Nasc.","Dep 2 - Idade","Dep 2 - Faixa","Dep 2 - Valor",
+       "Dep 3 - Nome","Dep 3 - Parentesco","Dep 3 - Nasc.","Dep 3 - Idade","Dep 3 - Faixa","Dep 3 - Valor",
+       "Dep 4 - Nome","Dep 4 - Parentesco","Dep 4 - Nasc.","Dep 4 - Idade","Dep 4 - Faixa","Dep 4 - Valor",
+       "Dep 5 - Nome","Dep 5 - Parentesco","Dep 5 - Nasc.","Dep 5 - Idade","Dep 5 - Faixa","Dep 5 - Valor"
+     ];
+     sheet.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]);
+     sheet.getRange(1, 1, 1, cabecalho.length).setFontWeight("bold").setBackground("#c0392b").setFontColor("#ffffff");
+     sheet.setFrozenRows(1);
+   }
+
    function doGet(e){return ContentService.createTextOutput(JSON.stringify({status:"ok"})).setMimeType(ContentService.MimeType.JSON);}
    function doPost(e){
      try{
@@ -295,7 +316,7 @@ table.copat td.val{font-family:'Nunito',sans-serif;font-weight:700;text-align:ri
    }
    ───────────────────────────────────────────── */
 
-const SCRIPT_URL = 'COLE_AQUI_A_URL_DO_APPS_SCRIPT';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4rKceJODZS3Hcm3aVVcshYKDh5jbtenjacyNbb0P6t-1GNC27hF_kW5XMTn4FIPY1/exec';
 
 /* ══════════════════════════════════════════════
    PLANOS CHAMPION — BRADESCO SAÚDE
@@ -636,53 +657,68 @@ function setRedeFilter(reg, key) {
 /* ══════════════════════════════════════════════
    DEPENDENTES — STEP 3
 ══════════════════════════════════════════════ */
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function addDep() { state.deps.push({ nome:'', parentesco:'', dataNasc:'' }); renderDeps(); }
 function removeDep(i) { state.deps.splice(i, 1); renderDeps(); }
+
 function setDep(i, f, v) {
+  if (!state.deps[i]) return;
   state.deps[i][f] = v;
   if (f === 'dataNasc') {
-    const tag = document.getElementById(`age-dep-${i}`);
     const idade = calcIdade(v);
-    if (tag) { tag.textContent = idade !== null ? idade + ' anos' : ''; tag.classList.toggle('hidden', idade === null); }
-    const el = document.getElementById(`dep-price-${i}`);
+    const tag = document.getElementById('age-dep-' + i);
+    if (tag) {
+      tag.textContent = idade !== null ? idade + ' anos' : '';
+      tag.classList.toggle('hidden', idade === null);
+    }
     const faixa = calcFaixa(idade);
-    const p = PLANOS[state.planoKey];
-    const vd = faixa && p ? p.dep[faixa] || 0 : 0;
+    const p = state.planoKey ? PLANOS[state.planoKey] : null;
+    const vd = faixa && p ? (p.dep[faixa] || 0) : 0;
+    const el = document.getElementById('dep-price-' + i);
     if (el) el.textContent = vd > 0 ? fmt(vd) + ' / mês' : '';
   }
 }
 
 function renderDeps() {
   const list = document.getElementById('deps-list');
+  if (!list) return;
   const hoje = new Date().toISOString().split('T')[0];
   if (!state.deps.length) {
     list.innerHTML = '<p style="color:var(--muted);font-size:13px;margin-bottom:16px">Nenhum dependente adicionado. Clique no botão abaixo para adicionar.</p>';
     return;
   }
+  const p = state.planoKey ? PLANOS[state.planoKey] : null;
   list.innerHTML = state.deps.map((d, i) => {
-    const p = PLANOS[state.planoKey];
     const faixa = calcFaixa(calcIdade(d.dataNasc));
-    const preco = faixa && p ? p.dep[faixa] || 0 : 0;
+    const preco = faixa && p ? (p.dep[faixa] || 0) : 0;
     const idade = calcIdade(d.dataNasc);
-    const ptOpts = PARENTESCOS.map(pt => `<option value="${pt}" ${d.parentesco===pt?'selected':''}>${pt}</option>`).join('');
+    const ptOpts = PARENTESCOS.map(pt =>
+      `<option value="${esc(pt)}" ${d.parentesco === pt ? 'selected' : ''}>${esc(pt)}</option>`
+    ).join('');
     return `<div class="dep-card">
       <div class="dep-card-title">Dependente ${i + 1}</div>
-      <button class="dep-remove" onclick="removeDep(${i})">Remover</button>
+      <button type="button" class="dep-remove" onclick="removeDep(${i})">Remover</button>
       <div class="field-row">
-        <div class="field"><label>Nome</label>
-          <input type="text" value="${d.nome}" placeholder="Nome do dependente"
-            oninput="setDep(${i},'nome',this.value)">
+        <div class="field">
+          <label>Nome</label>
+          <input type="text" value="${esc(d.nome)}" placeholder="Nome do dependente"
+            data-idx="${i}" data-field="nome" oninput="setDep(+this.dataset.idx,this.dataset.field,this.value)">
         </div>
-        <div class="field"><label>Parentesco</label>
-          <select onchange="setDep(${i},'parentesco',this.value)">
+        <div class="field">
+          <label>Parentesco</label>
+          <select data-idx="${i}" data-field="parentesco" onchange="setDep(+this.dataset.idx,this.dataset.field,this.value)">
             <option value="">Selecione…</option>${ptOpts}
           </select>
         </div>
       </div>
-      <div class="field"><label>Data de nascimento</label>
-        <input type="date" value="${d.dataNasc}" max="${hoje}"
-          onchange="setDep(${i},'dataNasc',this.value)">
-        <div class="age-tag ${idade===null?'hidden':''}" id="age-dep-${i}">${idade!==null?idade+' anos':''}</div>
+      <div class="field">
+        <label>Data de nascimento</label>
+        <input type="date" value="${esc(d.dataNasc)}" max="${hoje}"
+          data-idx="${i}" data-field="dataNasc" onchange="setDep(+this.dataset.idx,this.dataset.field,this.value)">
+        <div class="age-tag ${idade === null ? 'hidden' : ''}" id="age-dep-${i}">${idade !== null ? idade + ' anos' : ''}</div>
       </div>
       <div id="dep-price-${i}" class="dep-price">${preco > 0 ? fmt(preco) + ' / mês' : ''}</div>
     </div>`;
@@ -777,7 +813,9 @@ async function enviar() {
     showSuccess(); return;
   }
   try {
-    await fetch(SCRIPT_URL, { method: 'POST', body: new URLSearchParams({ data: JSON.stringify(data) }) });
+    const url = new URL(SCRIPT_URL);
+    url.searchParams.set('data', JSON.stringify(data));
+    await fetch(url.toString(), { mode: 'no-cors' });
     showSuccess();
   } catch {
     btn.textContent = 'Tentar novamente'; btn.disabled = false;
